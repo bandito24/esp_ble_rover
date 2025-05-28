@@ -1,0 +1,62 @@
+# Compiled object files
+*.o
+*.d
+
+# Compiled binary files
+*.bin
+*.elf
+*.map
+
+# Build output
+/build/
+build/
+
+# ESP-IDF project-specific build output
+*.bin
+*.elf
+*.map
+*.hex
+
+# SDK configuration
+sdkconfig
+sdkconfig.old
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Core dumps
+core
+
+# Generated partition tables
+partition_table/
+
+# Flash images and artifacts
+*.flash.bin
+*.bootloader.bin
+*.partition-table.bin
+*.ota_data_initial.bin
+*.factory.bin
+*.ota.bin
+
+# ccache (if used)
+ccache/
+
+# CLion cmake output
+cmake-build-*/
+
+# Backup files
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
