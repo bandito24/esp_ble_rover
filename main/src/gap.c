@@ -7,6 +7,7 @@
 #include "gap.h"
 #include "common.h"
 #include "gatt_svc.h"
+#include "led.h"
 
 /* Private function declarations */
 inline static void format_addr(char *addr_str, uint8_t addr[]);
@@ -123,6 +124,7 @@ static void start_advertising(void) {
         return;
     }
     ESP_LOGI(TAG, "advertising started!");
+    led_set_is_connected(false);
 }
 
 /*
@@ -178,6 +180,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
                     rc);
                 return rc;
             }
+            led_set_is_connected(true);
         }
         /* Connection failed, restart advertising */
         else {
@@ -244,7 +247,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
                  event->subscribe.cur_indicate);
 
         /* GATT subscribe event callback */
-        gatt_svr_subscribe_cb(event);
+        // gatt_svr_subscribe_cb(event); todo add this back
         return rc;
 
     /* MTU update event */

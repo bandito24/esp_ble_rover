@@ -7,7 +7,6 @@
 #include "common.h"
 #include "gap.h"
 #include "gatt_svc.h"
-#include "heart_rate.h"
 #include "led.h"
 
 /* Library function declarations */
@@ -57,26 +56,7 @@ static void nimble_host_task(void *param) {
     vTaskDelete(NULL);
 }
 
-static void heart_rate_task(void *param) {
-    /* Task entry log */
-    ESP_LOGI(TAG, "heart rate task has been started!");
 
-    /* Loop forever */
-    while (1) {
-        /* Update heart rate value every 1 second */
-        update_heart_rate();
-        ESP_LOGI(TAG, "heart rate updated to %d", get_heart_rate());
-
-        /* Send heart rate indication if enabled */
-        send_heart_rate_indication();
-
-        /* Sleep */
-        vTaskDelay(HEART_RATE_TASK_PERIOD);
-    }
-
-    /* Clean up at exit */
-    vTaskDelete(NULL);
-}
 
 void app_main(void) {
     /* Local variables */
@@ -109,6 +89,12 @@ void app_main(void) {
         return;
     }
 
+    ret = led_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "failed to initialize nimble stack, error code: %d ",
+                 ret); //Continue through this error--useful but not crucial
+    }
+
     /* GAP service initialization */
     rc = gap_init();
     if (rc != 0) {
@@ -117,17 +103,18 @@ void app_main(void) {
     }
 
     /* GATT server initialization */
-    rc = gatt_svc_init();
-    if (rc != 0) {
-        ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
-        return;
-    }
+    // rc = gatt_svc_init();
+    // if (rc != 0) {
+    //     ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
+    //     return;
+    // }
 
     /* NimBLE host configuration initialization */
     nimble_host_config_init();
 
     /* Start NimBLE host task thread and return */
+    xTaskCreate(led_conn_task, "Rover Connection Indicator", 1024, NULL, 5, NULL);
     xTaskCreate(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL);
-    xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
-    return;
+    // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
+    // return;
 }

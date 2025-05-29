@@ -17,6 +17,9 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#include "esp_check.h"
+#include "driver/gpio.h"
+
 
 /* FreeRTOS APIs */
 #include <freertos/FreeRTOS.h>
@@ -31,7 +34,8 @@
 #include "nimble/nimble_port_freertos.h"
 
 /* Defines */
-#define TAG "NimBLE_GATT_Server"
-#define DEVICE_NAME "NimBLE_GATT"
+#define TAG "ESP Rover"
+#define DEVICE_NAME "ESP Rover"
+#define LED_PIN GPIO_NUM_4
 
 #endif // COMMON_H
