@@ -6,6 +6,7 @@
 /* Includes */
 #include "gatt_svc.h"
 #include "common.h"
+#include "rover_cmd.h"
 
 /* Private function declarations */
 // static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -44,7 +45,7 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
          (struct ble_gatt_chr_def[]){
              {/* Heart rate characteristic */
               .uuid = &rover_cmd_svc_uuid.u,
-              .access_cb = heart_rate_chr_access,
+              .access_cb = rover_cmd_chr_access,
               .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_INDICATE,
               .val_handle = &rover_cmd_val_handle},
              {
@@ -58,33 +59,39 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
 };
 
 /* Private functions */
-static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
+static int rover_cmd_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                  struct ble_gatt_access_ctxt *ctxt, void *arg) {
-    /* Local variables */
+ /* Local variables */
     int rc;
+    return 0;
 
     /* Handle access events */
-    /* Note: Heart rate characteristic is read only */
+    /* Note: LED characteristic is write only */
     switch (ctxt->op) {
 
-    /* Read characteristic event */
-    case BLE_GATT_ACCESS_OP_READ_CHR:
+    /* Write characteristic event */
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
         /* Verify connection handle */
         if (conn_handle != BLE_HS_CONN_HANDLE_NONE) {
-            ESP_LOGI(TAG, "characteristic read; conn_handle=%d attr_handle=%d",
+            ESP_LOGI(TAG, "characteristic write; conn_handle=%d attr_handle=%d",
                      conn_handle, attr_handle);
         } else {
-            ESP_LOGI(TAG, "characteristic read by nimble stack; attr_handle=%d",
+            ESP_LOGI(TAG,
+                     "characteristic write by nimble stack; attr_handle=%d",
                      attr_handle);
         }
 
         /* Verify attribute handle */
-        if (attr_handle == heart_rate_chr_val_handle) {
-            /* Update access buffer value */
-            // heart_rate_chr_val[1] = get_heart_rate();
-            // rc = os_mbuf_append(ctxt->om, &heart_rate_chr_val,
-            //                     sizeof(heart_rate_chr_val));
-            // return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        if (attr_handle == rover_cmd_val_handle) {
+            /* Verify access buffer length */
+            if (ctxt->om->om_len == 1) {
+                if (ctxt->om->om_data[0]) {
+                   interpret_rover_command(ctxt->om->om_data[0]);
+                }
+            } else {
+                goto error;
+            }
+            return rc;
         }
         goto error;
 
@@ -94,81 +101,13 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 
 error:
-    ESP_LOGE(
-        TAG,
-        "unexpected access operation to heart rate characteristic, opcode: %d",
-        ctxt->op);
-    return BLE_ATT_ERR_UNLIKELY;
-}
-
-static int led_chr_access(uint16_t conn_handle, uint16_t attr_handle,
-                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
-    /* Local variables */
-    int rc;
-    return 0;
-
-    /* Handle access events */
-    /* Note: LED characteristic is write only */
-    // switch (ctxt->op) {
-
-    // /* Write characteristic event */
-    // case BLE_GATT_ACCESS_OP_WRITE_CHR:
-    //     /* Verify connection handle */
-    //     if (conn_handle != BLE_HS_CONN_HANDLE_NONE) {
-    //         ESP_LOGI(TAG, "characteristic write; conn_handle=%d attr_handle=%d",
-    //                  conn_handle, attr_handle);
-    //     } else {
-    //         ESP_LOGI(TAG,
-    //                  "characteristic write by nimble stack; attr_handle=%d",
-    //                  attr_handle);
-    //     }
-
-    //     /* Verify attribute handle */
-    //     if (attr_handle == led_chr_val_handle) {
-    //         /* Verify access buffer length */
-    //         if (ctxt->om->om_len == 1) {
-    //             /* Turn the LED on or off according to the operation bit */
-    //             if (ctxt->om->om_data[0]) {
-    //                 led_on();
-    //                 ESP_LOGI(TAG, "led turned on!");
-    //             } else {
-    //                 led_off();
-    //                 ESP_LOGI(TAG, "led turned off!");
-    //             }
-    //         } else {
-    //             goto error;
-    //         }
-    //         return rc;
-    //     }
-    //     goto error;
-
-    // /* Unknown event */
-    // default:
-    //     goto error;
-    // }
-
-error:
     ESP_LOGE(TAG,
              "unexpected access operation to led characteristic, opcode: %d",
              ctxt->op);
     return BLE_ATT_ERR_UNLIKELY;
 }
 
-/* Public functions */
-void send_heart_rate_indication(void) {
-    // if (heart_rate_ind_status && heart_rate_chr_conn_handle_inited) {
-    //     ble_gatts_indicate(heart_rate_chr_conn_handle,
-    //                        heart_rate_chr_val_handle);
-    //     ESP_LOGI(TAG, "heart rate indication sent!");
-    // }
-}
 
-/*
- *  Handle GATT attribute register events
- *      - Service register event
- *      - Characteristic register event
- *      - Descriptor register event
- */
 void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
     /* Local variables */
     char buf[BLE_UUID_STR_LEN];
@@ -206,10 +145,6 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
     }
 }
 
-/*
- *  GATT server subscribe event callback
- *      1. Update heart rate subscription status
- */
 
 void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
     /* Check connection handle */

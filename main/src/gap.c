@@ -247,7 +247,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
                  event->subscribe.cur_indicate);
 
         /* GATT subscribe event callback */
-        // gatt_svr_subscribe_cb(event); todo add this back
+        gatt_svr_subscribe_cb(event); 
         return rc;
 
     /* MTU update event */

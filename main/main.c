@@ -8,6 +8,7 @@
 #include "gap.h"
 #include "gatt_svc.h"
 #include "led.h"
+#include "rover_cmd.h"
 
 /* Library function declarations */
 void ble_store_config_init(void);
@@ -88,12 +89,20 @@ void app_main(void) {
                  ret);
         return;
     }
+    /* Rover Command Initialization */
+    ret = rover_wheels_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "failed to properly intialize all rover wheels, error code: %d ",
+                 ret);
+        return;
+    }
 
     ret = led_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "failed to initialize nimble stack, error code: %d ",
+        ESP_LOGE(TAG, "failed to initialize led, error code: %d ",
                  ret); //Continue through this error--useful but not crucial
     }
+
 
     /* GAP service initialization */
     rc = gap_init();
@@ -103,11 +112,11 @@ void app_main(void) {
     }
 
     /* GATT server initialization */
-    // rc = gatt_svc_init();
-    // if (rc != 0) {
-    //     ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
-    //     return;
-    // }
+    rc = gatt_svc_init();
+    if (rc != 0) {
+        ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
+        return;
+    }
 
     /* NimBLE host configuration initialization */
     nimble_host_config_init();
@@ -115,6 +124,7 @@ void app_main(void) {
     /* Start NimBLE host task thread and return */
     xTaskCreate(led_conn_task, "Rover Connection Indicator", 1024, NULL, 5, NULL);
     xTaskCreate(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL);
+    xTaskCreate(rover_command_task, "Rover Command Task", 1024, NULL, 5, NULL);
     // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
     // return;
 }
