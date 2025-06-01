@@ -124,7 +124,7 @@ void app_main(void) {
     /* Start NimBLE host task thread and return */
     xTaskCreate(led_conn_task, "Rover Connection Indicator", 1024, NULL, 5, NULL);
     xTaskCreate(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL);
-    xTaskCreate(rover_command_task, "Rover Command Task", 1024, NULL, 5, NULL);
+    xTaskCreate(rover_command_task, "Rover Command Task", 4*1024, NULL, 5, NULL);
     // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
     // return;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "stdint.h"
+#include "esp_err.h"
 
 #define PWM_DUTY_RESOLUTION LEDC_TIMER_8_BIT
 #define PWM_FREQUENCY 5000

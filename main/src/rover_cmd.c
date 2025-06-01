@@ -13,7 +13,7 @@ typedef enum {
 } wheel_indication;
 typedef enum { FORWARD = 1, BACKWARD = 0 } wheel_spin;
 
-const char *WHEEL_TAG = "WHEEL CONFIG";
+const char *WHEEL_TAG = "ROVER RESPONSE";
 volatile static uint8_t power_multiplier = 1;
 volatile static rover_command rover_status = IDLE;
 
@@ -63,10 +63,10 @@ esp_err_t rover_wheels_init() {
   esp_err_t res;
   esp_err_t rc = ESP_OK;
   for (int i = 0; i < 4; i++) {
-    gpio_config_t wheel_cfg = {
-        .pin_bit_mask = 1ULL
-                        << (rover_wheels[i].in1_pin | rover_wheels[i].in2_pin),
-        .mode = GPIO_MODE_DEF_OUTPUT};
+    gpio_config_t wheel_cfg = {.pin_bit_mask =
+                                   (1ULL << rover_wheels[i].in1_pin) |
+                                   (1ULL << rover_wheels[i].in2_pin),
+                               .mode = GPIO_MODE_DEF_OUTPUT};
     res = gpio_config(&wheel_cfg);
     if (res != ESP_OK) {
       rc = res;
@@ -102,20 +102,24 @@ esp_err_t rover_wheels_init() {
       ESP_LOGI(WHEEL_TAG, "PWM channel config for wheel number %d successful",
                i);
     }
-    return rc;
   }
+  return rc;
 }
 
 // this is what we will expose as the callback for ble
 void interpret_rover_command(rover_command command) {
   if (command == ACTIVATE_TURBO) {
     activate_turbo(true);
+    ESP_LOGI(WHEEL_TAG, "Activating turbo");
   } else if (command == DEACTIVATE_TURBO) {
     activate_turbo(false);
-  } else if (command >= IDLE && command <= MOVE_RIGHT) {
-    rover_status = command;
+    ESP_LOGI(WHEEL_TAG, "Deactivating turbo");
   } else {
-    ESP_LOGE(TAG, "Invalid command provided for rover");
+    if(rover_status != command){
+      dont_move();
+      vTaskDelay(pdMS_TO_TICKS(100)); //100ms stop to let motor slow
+    }
+    rover_status = command;
   }
 }
 
@@ -137,7 +141,8 @@ static void command_rover_wheels(rover_command command) {
     move_right();
     break;
   default:
-    dont_move();
+    rover_status = IDLE;
+    ESP_LOGE(TAG, "Invalid command provided for rover");
   }
 }
 
@@ -148,6 +153,19 @@ static void move_wheel(wheel_indication selected_wheel, wheel_spin direction) {
 
   ESP_ERROR_CHECK(gpio_set_level(wheel.in1_pin, direction ? 1 : 0));
   ESP_ERROR_CHECK(gpio_set_level(wheel.in2_pin, direction ? 0 : 1));
+
+  if (!ledc_get_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel])) {
+    for (int duty = 0; duty <= 255; duty += 5) {
+      ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], duty);
+      ledc_update_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]);
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+  } 
+  // else {
+  //   ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], 0);
+  //   ledc_update_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]);
+  //   vTaskDelay(pdMS_TO_TICKS(100)); // 100ms stop to let motor slow
+  // }
 
   uint32_t raw_duty = BASE_DUTY * power_multiplier;
   uint32_t duty = (raw_duty > 255) ? 255 : raw_duty;
@@ -196,7 +214,6 @@ static void dont_move() {
 }
 
 static void stop_wheel(wheel_indication selected_wheel) {
-  rover_cmd_wheel wheel = rover_wheels[selected_wheel];
   ESP_ERROR_CHECK(
       ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], 0));
   ESP_ERROR_CHECK(
