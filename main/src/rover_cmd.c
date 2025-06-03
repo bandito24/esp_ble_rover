@@ -2,7 +2,7 @@
 #include "common.h"
 #include "driver/ledc.h"
 
-#define BASE_DUTY 180
+#define BASE_DUTY 220
 
 typedef enum {
   FRONT_LEFT,
@@ -16,6 +16,7 @@ typedef enum { FORWARD = 1, BACKWARD = 0 } wheel_spin;
 const char *WHEEL_TAG = "ROVER RESPONSE";
 volatile static uint8_t power_multiplier = 1;
 volatile static rover_command rover_status = IDLE;
+volatile static bool updated_command = false;
 
 static void move_left();
 static void move_right();
@@ -37,8 +38,8 @@ const rover_cmd_wheel rover_wheels[4] = {
     [FRONT_LEFT] = {.in1_pin = GPIO_NUM_14,
                     .in2_pin = GPIO_NUM_15,
                     .enable_pin = GPIO_NUM_13},
-    [FRONT_RIGHT] = {.in1_pin = GPIO_NUM_16,
-                     .in2_pin = GPIO_NUM_17,
+    [FRONT_RIGHT] = {.in1_pin = GPIO_NUM_5,
+                     .in2_pin = GPIO_NUM_27,
                      .enable_pin = GPIO_NUM_12},
     [BACK_LEFT] = {.in1_pin = GPIO_NUM_18,
                    .in2_pin = GPIO_NUM_19,
@@ -55,7 +56,7 @@ const ledc_channel_t pwm_channels[4] = {[FRONT_LEFT] = LEDC_CHANNEL_0,
 void rover_command_task(void *param) {
   while (1) {
     command_rover_wheels(rover_status);
-    vTaskDelay(50);
+    vTaskDelay(1);
   }
 }
 
@@ -115,15 +116,19 @@ void interpret_rover_command(rover_command command) {
     activate_turbo(false);
     ESP_LOGI(WHEEL_TAG, "Deactivating turbo");
   } else {
-    if(rover_status != command){
-      dont_move();
-      vTaskDelay(pdMS_TO_TICKS(100)); //100ms stop to let motor slow
+    if (rover_status != command) {
+    updated_command = true;
     }
     rover_status = command;
   }
 }
 
 static void command_rover_wheels(rover_command command) {
+  if(updated_command){
+    dont_move();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    updated_command = false;
+  }
   switch (command) {
   case IDLE:
     dont_move();
@@ -154,24 +159,16 @@ static void move_wheel(wheel_indication selected_wheel, wheel_spin direction) {
   ESP_ERROR_CHECK(gpio_set_level(wheel.in1_pin, direction ? 1 : 0));
   ESP_ERROR_CHECK(gpio_set_level(wheel.in2_pin, direction ? 0 : 1));
 
-  if (!ledc_get_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel])) {
-    for (int duty = 0; duty <= 255; duty += 5) {
-      ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], duty);
-      ledc_update_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]);
-      vTaskDelay(pdMS_TO_TICKS(10));
-    }
-  } 
-  // else {
-  //   ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], 0);
-  //   ledc_update_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]);
-  //   vTaskDelay(pdMS_TO_TICKS(100)); // 100ms stop to let motor slow
-  // }
 
   uint32_t raw_duty = BASE_DUTY * power_multiplier;
-  uint32_t duty = (raw_duty > 255) ? 255 : raw_duty;
+  uint32_t updated_duty = (raw_duty > 255) ? 255 : raw_duty;
+  uint32_t curr_duty = ledc_get_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]);
+  if (curr_duty < updated_duty) {
+    updated_duty += 5;
+  }
 
   ESP_ERROR_CHECK(
-      ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], duty));
+      ledc_set_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel], updated_duty));
   ESP_ERROR_CHECK(
       ledc_update_duty(PWM_SPEED_MODE, pwm_channels[selected_wheel]));
 }
@@ -193,6 +190,7 @@ static void move_right() {
 }
 
 static void move_forward() {
+
   ESP_LOGI(WHEEL_TAG, "Moving forward");
   for (int i = 0; i < WHEEL_COUNT; i++) {
     move_wheel(i, FORWARD);
